@@ -2,6 +2,8 @@
 // Liikennevalot RGB2-ledillä ja taskien avulla
 //
 // Tavoite: 3 pistettä
+// Saavutettu kaikki tarvittavat tavoitteet 3 pistettä varten 
+// Sekä kaikki mahdolliset ylimääräiset kohdat.
 // Tilat:
 // 0 = punainen
 // 1 = keltainen
