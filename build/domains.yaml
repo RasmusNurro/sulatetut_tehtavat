@@ -1,0 +1,7 @@
+default: sulatetut
+build_dir: C:/Users/rasmu/sulatetut/build
+domains:
+  - name: sulatetut
+    build_dir: C:/Users/rasmu/sulatetut/build/sulatetut
+flash_order:
+  - sulatetut

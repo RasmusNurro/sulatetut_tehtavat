@@ -1,0 +1,13 @@
+# Target labels
+ sulatetut
+# Source files and their labels
+C:/Users/rasmu/sulatetut/build/_sysbuild/sysbuild/images/CMakeFiles/sulatetut
+C:/Users/rasmu/sulatetut/build/_sysbuild/sysbuild/images/CMakeFiles/sulatetut.rule
+C:/Users/rasmu/sulatetut/build/_sysbuild/sysbuild/images/CMakeFiles/sulatetut-complete.rule
+C:/Users/rasmu/sulatetut/build/_sysbuild/sysbuild/images/sulatetut-prefix/src/sulatetut-stamp/sulatetut-build.rule
+C:/Users/rasmu/sulatetut/build/_sysbuild/sysbuild/images/sulatetut-prefix/src/sulatetut-stamp/sulatetut-configure.rule
+C:/Users/rasmu/sulatetut/build/_sysbuild/sysbuild/images/sulatetut-prefix/src/sulatetut-stamp/sulatetut-download.rule
+C:/Users/rasmu/sulatetut/build/_sysbuild/sysbuild/images/sulatetut-prefix/src/sulatetut-stamp/sulatetut-install.rule
+C:/Users/rasmu/sulatetut/build/_sysbuild/sysbuild/images/sulatetut-prefix/src/sulatetut-stamp/sulatetut-mkdir.rule
+C:/Users/rasmu/sulatetut/build/_sysbuild/sysbuild/images/sulatetut-prefix/src/sulatetut-stamp/sulatetut-patch.rule
+C:/Users/rasmu/sulatetut/build/_sysbuild/sysbuild/images/sulatetut-prefix/src/sulatetut-stamp/sulatetut-update.rule

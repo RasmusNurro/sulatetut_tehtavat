@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "C:/Users/rasmu/sulatetut/build/_sysbuild/sysbuild/images/CMakeFiles/sulatetut"
+		},
+		{
+			"file" : "C:/Users/rasmu/sulatetut/build/_sysbuild/sysbuild/images/CMakeFiles/sulatetut.rule"
+		},
+		{
+			"file" : "C:/Users/rasmu/sulatetut/build/_sysbuild/sysbuild/images/CMakeFiles/sulatetut-complete.rule"
+		},
+		{
+			"file" : "C:/Users/rasmu/sulatetut/build/_sysbuild/sysbuild/images/sulatetut-prefix/src/sulatetut-stamp/sulatetut-build.rule"
+		},
+		{
+			"file" : "C:/Users/rasmu/sulatetut/build/_sysbuild/sysbuild/images/sulatetut-prefix/src/sulatetut-stamp/sulatetut-configure.rule"
+		},
+		{
+			"file" : "C:/Users/rasmu/sulatetut/build/_sysbuild/sysbuild/images/sulatetut-prefix/src/sulatetut-stamp/sulatetut-download.rule"
+		},
+		{
+			"file" : "C:/Users/rasmu/sulatetut/build/_sysbuild/sysbuild/images/sulatetut-prefix/src/sulatetut-stamp/sulatetut-install.rule"
+		},
+		{
+			"file" : "C:/Users/rasmu/sulatetut/build/_sysbuild/sysbuild/images/sulatetut-prefix/src/sulatetut-stamp/sulatetut-mkdir.rule"
+		},
+		{
+			"file" : "C:/Users/rasmu/sulatetut/build/_sysbuild/sysbuild/images/sulatetut-prefix/src/sulatetut-stamp/sulatetut-patch.rule"
+		},
+		{
+			"file" : "C:/Users/rasmu/sulatetut/build/_sysbuild/sysbuild/images/sulatetut-prefix/src/sulatetut-stamp/sulatetut-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"sulatetut"
+		],
+		"name" : "sulatetut"
+	}
+}

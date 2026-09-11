@@ -1,0 +1,22 @@
+cmake:
+  board:
+    name: 'nrf5340_audio_dk'
+    path:
+     - 'C:/ncs/v3.1.1/zephyr/boards/nordic/nrf5340_audio_dk'
+    qualifiers: 'nrf5340/cpuapp'
+    revision: ''
+  images:
+   - name: 'sulatetut'
+     source-dir: 'C:/Users/rasmu/sulatetut'
+     type: 'MAIN'
+  kconfig:
+    files:
+     - 'C:/Users/rasmu/sulatetut/build/_sysbuild/empty.conf'
+     - 'C:/Users/rasmu/sulatetut/build/_sysbuild/empty.conf'
+    user-files:
+     - 'C:/Users/rasmu/sulatetut/build/_sysbuild/empty.conf'
+version: '0.1.0'
+west:
+  command: 'C:\ncs\toolchains\c1a76fddb2\opt\bin\Scripts\west build --build-dir c:/Users/rasmu/sulatetut/build c:/Users/rasmu/sulatetut --pristine --board nrf5340_audio_dk/nrf5340/cpuapp -- -DCONF_FILE=prj.conf -DDEBUG_THREAD_INFO=On -DCONFIG_DEBUG_THREAD_INFO=y -Dsulatetut_DEBUG_THREAD_INFO=On'
+  topdir: 'c:\ncs\v3.1.1'
+  version: '1.4.0'

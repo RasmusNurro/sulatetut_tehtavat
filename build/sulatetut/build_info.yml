@@ -1,0 +1,54 @@
+cmake:
+  application:
+    configuration-dir: 'C:/Users/rasmu/sulatetut'
+    source-dir: 'C:/Users/rasmu/sulatetut'
+  board:
+    name: 'nrf5340_audio_dk'
+    path:
+     - 'C:/ncs/v3.1.1/zephyr/boards/nordic/nrf5340_audio_dk'
+    qualifiers: 'nrf5340/cpuapp'
+    revision: ''
+  devicetree:
+    bindings-dirs:
+     - 'C:/ncs/v3.1.1/nrf/dts/bindings'
+     - 'C:/ncs/v3.1.1/zephyr/dts/bindings'
+    files:
+     - 'C:/ncs/v3.1.1/zephyr/boards/nordic/nrf5340_audio_dk/nrf5340_audio_dk_nrf5340_cpuapp.dts'
+    include-dirs:
+     - 'C:/ncs/v3.1.1/nrf/include'
+     - 'C:/ncs/v3.1.1/nrf/dts/common'
+     - 'C:/ncs/v3.1.1/nrf/dts/riscv'
+     - 'C:/ncs/v3.1.1/nrf/dts/arm'
+     - 'C:/ncs/v3.1.1/nrf/dts'
+     - 'C:/ncs/v3.1.1/zephyr/include'
+     - 'C:/ncs/v3.1.1/zephyr/include/zephyr'
+     - 'C:/ncs/v3.1.1/zephyr/dts/common'
+     - 'C:/ncs/v3.1.1/zephyr/dts/vendor'
+     - 'C:/ncs/v3.1.1/zephyr/dts/rx'
+     - 'C:/ncs/v3.1.1/zephyr/dts/x86'
+     - 'C:/ncs/v3.1.1/zephyr/dts/xtensa'
+     - 'C:/ncs/v3.1.1/zephyr/dts/sparc'
+     - 'C:/ncs/v3.1.1/zephyr/dts/riscv'
+     - 'C:/ncs/v3.1.1/zephyr/dts/posix'
+     - 'C:/ncs/v3.1.1/zephyr/dts/arm64'
+     - 'C:/ncs/v3.1.1/zephyr/dts/arm'
+     - 'C:/ncs/v3.1.1/zephyr/dts/arc'
+     - 'C:/ncs/v3.1.1/zephyr/dts'
+  kconfig:
+    files:
+     - 'C:/ncs/v3.1.1/zephyr/boards/nordic/nrf5340_audio_dk/nrf5340_audio_dk_nrf5340_cpuapp_defconfig'
+     - 'C:/Users/rasmu/sulatetut/prj.conf'
+     - 'C:/Users/rasmu/sulatetut/build/sulatetut/zephyr/misc/generated/extra_kconfig_options.conf'
+     - 'C:/Users/rasmu/sulatetut/build/sulatetut/zephyr/.config.sysbuild'
+    user-files:
+     - 'prj.conf'
+  toolchain:
+    name: 'zephyr'
+    path: 'C:/ncs/toolchains/c1a76fddb2/opt/zephyr-sdk'
+  vendor-specific:
+    nordic:
+      svdfile: 'C:/ncs/v3.1.1/modules/hal/nordic/nrfx/mdk/nrf5340_application.svd'
+  zephyr:
+    version: '4.1.99'
+    zephyr-base: 'C:/ncs/v3.1.1/zephyr'
+version: '0.1.0'

@@ -1,0 +1,19 @@
+{
+  "toolchainPath": "c:\\ncs\\toolchains\\c1a76fddb2",
+  "sdkPath": "c:\\ncs\\v3.1.1",
+  "board": "nrf5340_audio_dk/nrf5340/cpuapp",
+  "boardDir": "c:\\ncs\\v3.1.1\\zephyr\\boards\\nordic\\nrf5340_audio_dk",
+  "boardDirs": [
+    "c:\\ncs\\v3.1.1\\zephyr\\boards\\nordic\\nrf5340_audio_dk"
+  ],
+  "optimizations": "none",
+  "cmakeArgs": [],
+  "confFiles": [
+    "prj.conf"
+  ],
+  "buildDirectory": "build",
+  "kconfigFragments": [],
+  "snippets": [],
+  "dtcOverlays": [],
+  "extraDtcOverlays": []
+}
