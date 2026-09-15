@@ -21,6 +21,8 @@
 #include <zephyr/drivers/uart.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/sys/util.h>
+#include <zephyr/timing/timing.h>
+#include <zephyr/sys/__assert.h>
 
 #include <string.h>
 #include <stdlib.h>
