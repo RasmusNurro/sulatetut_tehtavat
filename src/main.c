@@ -1,13 +1,17 @@
 /* Liikennevalot RGB2-ledillä ja taskien avulla
 
-   Tavoite: 4 pistettä
-   Saavutettu kaikki tarvittavat tavoitteet 4 pistettä varten 
-   Sekä kaikki mahdolliset ylimääräiset kohdat.
-   Toteutettu: UART-sekvenssin vastaanotto,
-   FIFO UART, Dispatcher-task, FIFO eri väreille,
-   Condition variablet taskien ohjaukseen, Release signaali disp-
-   atcherille, sekvenssin ajastus, sekvenssin toisto, valotaskit 
-   eivät käytä polling-superlooppeja
+   Tavoite: 3p (tämän viikkotehtävän maksimipistemäärä)
+   Perustelu / toteutetut osat:
+   Ajoitukset jokaiseen valotaskiin (red/yellow/green) mikrosekuntien
+   tarkkuudella + sekvenssin kokonaisaika (summataan taskien ajoista).
+   - +1p: Debug-taski + FIFO-puskuri: muut taskit eivät enää kutsu printk:ta
+   suoraan, vaan lähettävät viestin debug_fifo:on, jota debug_task lukee.
+   - +1p: Kaksi lisä-ajoitustietoa: UART-komennon dispatch-käsittelyaika sekä
+   painonappien painallusten kokonaismäärä.
+   - +1p: Debugin asetus päälle/pois sarjaportin kautta komennolla 'D'
+   (debug_enabled-lippu DEBUG-vakion sijaan).
+   - +1p: Assert-tarkistuksia (7 kpl) ohjelman toiminnan varmistamiseksi.
+
    Nappien oletus:
    sw0 = nappi 1 = Play/Pause
    sw1 = nappi 2 = punainen
@@ -21,10 +25,14 @@
 #include <zephyr/drivers/uart.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/sys/util.h>
+#include <zephyr/sys/atomic.h>
+#include <zephyr/timing/timing.h>
+#include <zephyr/sys/__assert.h>
 
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdarg.h>
 
 
 #define RED_LED   DT_ALIAS(led3)
@@ -107,6 +115,45 @@ volatile bool manual_red = false;
 volatile bool manual_yellow = false;
 volatile bool manual_green = false;
 
+static volatile bool debug_enabled = true;
+
+struct debug_msg {
+    void *fifo_reserved;
+    char msg[80];
+};
+K_FIFO_DEFINE(debug_fifo);
+static uint64_t total_sequence_time_ns = 0;
+static atomic_t button_press_count = ATOMIC_INIT(0);
+static void debug_log(const char *fmt, ...)
+{
+    struct debug_msg *dmsg = k_malloc(sizeof(struct debug_msg));
+    if (dmsg == NULL) {
+        printk("debug-viesti puuttuu");
+        __ASSERT(false, "debug_log: out of memory");
+        return;
+    }
+    va_list args;
+    va_start(args, fmt);
+    vsnprintk(dmsg->msg, sizeof(dmsg->msg), fmt, args);
+    va_end(args);
+    k_fifo_put(&debug_fifo, dmsg);
+}
+
+void debug_task(void *unused1, void *unused2, void *unused3)
+{
+    ARG_UNUSED(unused1);
+    ARG_UNUSED(unused2);
+    ARG_UNUSED(unused3);
+    struct debug_msg *dmsg;
+    while (true) {
+        dmsg = k_fifo_get(&debug_fifo, K_FOREVER);
+        if (debug_enabled) {
+            printk("%s", dmsg->msg);
+        }
+        k_free(dmsg);
+    }
+}
+
 #define STACKSIZE 1000
 #define PRIORITY 5
 
@@ -115,6 +162,7 @@ void yellow_task(void *, void *, void *);
 void green_task(void *, void *, void *);
 static void uart_task(void *, void *, void *);
 static void dispatcher_task(void *, void *, void *);
+void debug_task(void *, void *, void *);
 int init_buttons(void);
 
 K_THREAD_DEFINE(red_tid,STACKSIZE,red_task,NULL,NULL,NULL,PRIORITY,0,0);
@@ -127,6 +175,9 @@ K_THREAD_DEFINE(uart_tid,STACKSIZE,uart_task,NULL,NULL,NULL,PRIORITY,0,0);
 
 K_THREAD_DEFINE(dispatcher_tid, STACKSIZE, dispatcher_task, NULL, NULL, NULL,
         PRIORITY, 0, 0);
+
+K_THREAD_DEFINE(debug_tid, STACKSIZE, debug_task, NULL, NULL, NULL, 
+    PRIORITY + 1, 0, 0);
 
 static void all_leds_off(void)
 {
@@ -163,7 +214,9 @@ void button_0_handler(const struct device *dev,
     ARG_UNUSED(dev);
     ARG_UNUSED(cb);
     ARG_UNUSED(pins);
-    printk("Button 1 - Play/Pause\n");
+    atomic_inc(&button_press_count);
+    printk("Button 1 - Play/Pause (painallukset yht: %d)\n",
+           (int)atomic_get(&button_press_count));
     static bool paused = false;
     paused = !paused;
     if (paused) {
@@ -183,7 +236,9 @@ void button_1_handler(
     ARG_UNUSED(dev);
     ARG_UNUSED(cb);
     ARG_UNUSED(pins);
-    printk("Button 2 - Red\n");
+    atomic_inc(&button_press_count);
+    printk("Button 2 - Red (painallukset yht: %d)\n",
+           (int)atomic_get(&button_press_count));
     manual_red = !manual_red;
     manual_yellow = false;
     manual_green = false;
@@ -202,7 +257,9 @@ void button_2_handler(
     ARG_UNUSED(dev);
     ARG_UNUSED(cb);
     ARG_UNUSED(pins);
-    printk("Button 3 - Yellow\n");
+    atomic_inc(&button_press_count);
+    printk("Button 3 - Yellow (painallukset yht: %d)\n",
+           (int)atomic_get(&button_press_count));
     manual_yellow = !manual_yellow;
     manual_red = false;
     manual_green = false;
@@ -221,7 +278,9 @@ void button_3_handler(
     ARG_UNUSED(dev);
     ARG_UNUSED(cb);
     ARG_UNUSED(pins);
-    printk("Button 4 - Green\n");
+    atomic_inc(&button_press_count);
+    printk("Button 4 - Green (painallukset yht: %d)\n",
+           (int)atomic_get(&button_press_count));
     manual_green = !manual_green;
     manual_red = false;
     manual_yellow = false;
@@ -240,7 +299,9 @@ void button_4_handler(
     ARG_UNUSED(dev);
     ARG_UNUSED(cb);
     ARG_UNUSED(pins);
-    printk("Button 5 - Flashing yellow\n");
+    atomic_inc(&button_press_count);
+    printk("Button 5 - Flashing yellow (painallukset yht: %d)\n",
+           (int)atomic_get(&button_press_count));
     manual_red = false;
     manual_yellow = false;
     manual_green = false;
@@ -271,11 +332,12 @@ static void uart_task(void *unused1, void *unused2, void *unused3)
             if (rc == '\r' || rc == '\n') {
                 if (uart_msg_cnt > 0) {
                     uart_msg[uart_msg_cnt] = '\0';
-                    printk("UART msg: %s\n", uart_msg);
+                    debug_log("UART msg: %s\n", uart_msg);
                     struct uart_data *buf =
                         k_malloc(sizeof(struct uart_data));
+                    __ASSERT(buf != NULL, "UART FIFO malloc failed");
                     if (buf == NULL) {
-                        printk("UART FIFO malloc failed\n");
+                        debug_log("UART FIFO malloc failed\n");
                         uart_msg_cnt = 0;
                         memset(uart_msg, 0, sizeof(uart_msg));
                         continue;
@@ -295,7 +357,9 @@ static void uart_task(void *unused1, void *unused2, void *unused3)
                     uart_msg_cnt++;
                 }
                 else {
-                    printk("UART message too long\n");
+                    debug_log("UART message too long\n");
+                    __ASSERT(false,
+                        "UART message too long, buffer overflow avoided");
                     uart_msg_cnt = 0;
                     memset(uart_msg, 0, sizeof(uart_msg));
                 }
@@ -342,16 +406,24 @@ static void dispatcher_task(void *unused1, void *unused2, void *unused3)
         if (rec_item == NULL) {
             continue;
         }
-        printk("Dispatcher received: %s\n", rec_item->msg);
+        timing_t dispatch_start = timing_counter_get();
+        debug_log("Dispatcher received: %s\n", rec_item->msg);
+        if (strcmp(rec_item->msg, "D") == 0) {
+            debug_enabled = !debug_enabled;
+            printk("Debug output %s\n", debug_enabled ? "ENABLED" : "DISABLED");
+            k_free(rec_item);
+            continue;
+        }
         if (strcmp(rec_item->msg, "T") == 0) {
-            printk("Dispatcher: repeat sequence\n");
+            debug_log("Dispatcher: repeat sequence\n");
             for (int i = 0;
                  i < sequence_length;
                  i++) {
                 struct light_command *cmd =
                     k_malloc(sizeof(struct light_command));
+                __ASSERT(cmd != NULL, "Out of memory while repeating sequence");
                 if (cmd == NULL) {
-                    printk("Repeat command malloc failed");
+                    debug_log("Repeat command malloc failed\n");
                     break;
                 }
                 cmd->color = sequence[i].color;
@@ -372,29 +444,35 @@ static void dispatcher_task(void *unused1, void *unused2, void *unused3)
                 }
                 k_sem_take(&release_sem,K_FOREVER);
             }
+            debug_log("Sequence total time: %llu us\n",
+            total_sequence_time_ns / 1000);
+            total_sequence_time_ns = 0;
             k_free(rec_item);
             continue;
         }
         char color = 0;
         uint32_t duration = 1000;
         if (!parse_command(rec_item->msg, &color,&duration)) {
-            printk( "Invalid command: %s\n", rec_item->msg);
+            debug_log( "Invalid command: %s\n", rec_item->msg);
+            __ASSERT(false, "Invalid command received via UART: %s",
+                      rec_item->msg);
             k_free(rec_item);
             continue;
         }
-        printk("Dispatcher: color=%c duration=%u ms\n", color, duration);
+        debug_log("Dispatcher: color=%c duration=%u ms\n", color, duration);
         if (sequence_length < MAX_SEQUENCE) {
             sequence[sequence_length].color = color;
             sequence[sequence_length].duration = duration;
             sequence_length++;
         }
         else {
-            printk("Sequence buffer full\n");
+            debug_log("Sequence buffer full\n");
         }
-        struct light_command *cmd = k_malloc(
-                sizeof(struct light_command));
+        __ASSERT(sequence_length <= MAX_SEQUENCE, "Sequence buffer overflow");
+        struct light_command *cmd = k_malloc(sizeof(struct light_command));
+        __ASSERT(cmd != NULL, "Out of memory while allocating light command");
         if (cmd == NULL) {
-            printk("Light command malloc failed\n");
+            debug_log("Light command malloc failed\n");
             k_free(rec_item);
             continue;
         }
@@ -417,6 +495,11 @@ static void dispatcher_task(void *unused1, void *unused2, void *unused3)
             k_free(cmd);
             break;
         }
+        timing_t dispatch_end = timing_counter_get();
+        uint64_t dispatch_ns = timing_cycles_to_ns(
+            timing_cycles_get(&dispatch_start, &dispatch_end));
+        debug_log("UART->dispatch latency: %llu us\n", dispatch_ns / 1000);
+
         if (color == 'R' ||
             color == 'Y' ||
             color == 'G') {
@@ -441,16 +524,26 @@ void red_task(
             cmd = k_fifo_get(&red_fifo, K_NO_WAIT);
         }
         k_mutex_unlock(&red_mutex);
+        __ASSERT(cmd != NULL,
+            "Red task woke up from condvar but FIFO was empty");
         if (cmd == NULL) {
             continue;
         }
-        printk("RED ON (%u ms)\n",
+        timing_t start_time = timing_counter_get();
+        debug_log("RED ON (%u ms)\n",
         cmd->duration);
 
         red_on();
         k_msleep(cmd->duration);
         all_leds_off();
-        printk("RED OFF\n");
+        debug_log("RED OFF\n");
+
+        timing_t end_time = timing_counter_get();
+        uint64_t diff_ns = timing_cycles_to_ns(
+                timing_cycles_get(&start_time, &end_time));
+        total_sequence_time_ns += diff_ns;
+        debug_log("Red task duration: %llu us\n", diff_ns / 1000);
+
         k_sem_give(&release_sem);
         k_free(cmd);
     }
@@ -472,18 +565,28 @@ void yellow_task(void *unused1, void *unused2, void *unused3)
 
             cmd = k_fifo_get(&yellow_fifo, K_NO_WAIT);
         }
-        k_mutex_unlock(
-            &yellow_mutex);
+        k_mutex_unlock(&yellow_mutex);
+        __ASSERT(cmd != NULL,
+            "Yellow task woke up from condvar but FIFO was empty");
         if (cmd == NULL) {
             continue;
         }
 
-        printk("YELLOW ON (%u ms)\n", cmd->duration);
+        timing_t start_time = timing_counter_get();
+
+        debug_log("YELLOW ON (%u ms)\n", cmd->duration);
 
         yellow_on();
         k_msleep(cmd->duration);
         all_leds_off();
-        printk("YELLOW OFF\n");
+        debug_log("YELLOW OFF\n");
+
+        timing_t end_time = timing_counter_get();
+        uint64_t diff_ns = timing_cycles_to_ns(
+                timing_cycles_get(&start_time, &end_time));
+        total_sequence_time_ns += diff_ns;
+        debug_log("Yellow task duration: %llu us\n", diff_ns / 1000);
+
         k_sem_give(&release_sem);
         k_free(cmd);
     }
@@ -507,16 +610,25 @@ void green_task(void *unused1, void *unused2, void *unused3)
             cmd = k_fifo_get(&green_fifo, K_NO_WAIT);
         }
         k_mutex_unlock(&green_mutex);
+        __ASSERT(cmd != NULL,
+            "Green task woke up from condvar but FIFO was empty");
         if (cmd == NULL) {
             continue;
         }
 
-        printk("GREEN ON (%u ms)\n",
+        timing_t start_time = timing_counter_get();
+        debug_log("GREEN ON (%u ms)\n",
         cmd->duration);
         green_on();
         k_msleep(cmd->duration);
         all_leds_off();
-        printk("GREEN OFF\n");
+        debug_log("GREEN OFF\n");
+        timing_t end_time = timing_counter_get();
+        uint64_t diff_ns = timing_cycles_to_ns(
+                timing_cycles_get(&start_time, &end_time));
+        total_sequence_time_ns += diff_ns;
+        debug_log("Green task duration: %llu us\n", diff_ns / 1000);
+
         k_sem_give(&release_sem);
         k_free(cmd);
     }
@@ -626,6 +738,9 @@ int init_buttons(void)
 int main(void)
 {
     int ret;
+    timing_init();
+    timing_start();
+
     if (!gpio_is_ready_dt(&red_led) ||
         !gpio_is_ready_dt(&green_led) ||
         !gpio_is_ready_dt(&blue_led)) {
@@ -663,12 +778,13 @@ int main(void)
     printk("\n");
     printk("==============================\n");
     printk("RGB2 traffic light started\n");
-    printk("==============================\n");
+    printk("====================s==========\n");
     printk("Send commands through UART:\n");
     printk("R,1000\n");
     printk("Y,500\n");
     printk("G,1000\n");
     printk("T\n");
+    printk("D            (toggle debug prints on/off)\n");
     printk("==============================\n");
 
     return 0;

@@ -154,6 +154,9 @@ C:/Users/rasmu/sulatetut/build/sulatetut/zephyr/subsys/tracing/CMakeFiles/edit_c
 C:/Users/rasmu/sulatetut/build/sulatetut/zephyr/subsys/tracing/CMakeFiles/rebuild_cache.dir
 C:/Users/rasmu/sulatetut/build/sulatetut/zephyr/subsys/usb/CMakeFiles/edit_cache.dir
 C:/Users/rasmu/sulatetut/build/sulatetut/zephyr/subsys/usb/CMakeFiles/rebuild_cache.dir
+C:/Users/rasmu/sulatetut/build/sulatetut/zephyr/subsys/timing/CMakeFiles/subsys__timing.dir
+C:/Users/rasmu/sulatetut/build/sulatetut/zephyr/subsys/timing/CMakeFiles/edit_cache.dir
+C:/Users/rasmu/sulatetut/build/sulatetut/zephyr/subsys/timing/CMakeFiles/rebuild_cache.dir
 C:/Users/rasmu/sulatetut/build/sulatetut/zephyr/drivers/CMakeFiles/edit_cache.dir
 C:/Users/rasmu/sulatetut/build/sulatetut/zephyr/drivers/CMakeFiles/rebuild_cache.dir
 C:/Users/rasmu/sulatetut/build/sulatetut/zephyr/drivers/disk/CMakeFiles/edit_cache.dir

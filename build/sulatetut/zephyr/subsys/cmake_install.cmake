@@ -142,3 +142,8 @@ if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   include("C:/Users/rasmu/sulatetut/build/sulatetut/zephyr/subsys/usb/cmake_install.cmake")
 endif()
 
+if(NOT CMAKE_INSTALL_LOCAL_ONLY)
+  # Include the install script for the subdirectory.
+  include("C:/Users/rasmu/sulatetut/build/sulatetut/zephyr/subsys/timing/cmake_install.cmake")
+endif()
+
