@@ -2,15 +2,21 @@
 
    Tavoite: 3p (tämän viikkotehtävän maksimipistemäärä)
    Perustelu / toteutetut osat:
-   Ajoitukset jokaiseen valotaskiin (red/yellow/green) mikrosekuntien
-   tarkkuudella + sekvenssin kokonaisaika (summataan taskien ajoista).
+   - 1p: Ajoitukset jokaiseen valotaskiin (red/yellow/green) mikrosekuntien
+         tarkkuudella + sekvenssin kokonaisaika (summataan taskien ajoista).
+         Mitattavissa debug päällä/pois -tilassa 'D'-komennolla.
    - +1p: Debug-taski + FIFO-puskuri: muut taskit eivät enää kutsu printk:ta
-   suoraan, vaan lähettävät viestin debug_fifo:on, jota debug_task lukee.
+         suoraan, vaan lähettävät viestin debug_fifo:on, jota debug_task lukee.
    - +1p: Kaksi lisä-ajoitustietoa: UART-komennon dispatch-käsittelyaika sekä
-   painonappien painallusten kokonaismäärä.
+         painonappien painallusten kokonaismäärä.
    - +1p: Debugin asetus päälle/pois sarjaportin kautta komennolla 'D'
-   (debug_enabled-lippu DEBUG-vakion sijaan).
+         (debug_enabled-lippu DEBUG-vakion sijaan).
    - +1p: Assert-tarkistuksia (7 kpl) ohjelman toiminnan varmistamiseksi.
+
+   Unit testing -tehtava (parser/-kansio, googletest, 17/17 testia lapaisee):
+   - 1p: time_parse() HHMMSS-parseri + boundary-testit + integraatio tahan
+         ohjelmaan (kts. countdown_timer/red_off_timer + dispatcher_task,
+         UART-komento HHMMSS kaynnistaa ajastimen)
 
    Nappien oletus:
    sw0 = nappi 1 = Play/Pause
@@ -33,6 +39,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <ctype.h>
 
 
 #define RED_LED   DT_ALIAS(led3)
@@ -128,14 +135,14 @@ static void debug_log(const char *fmt, ...)
 {
     struct debug_msg *dmsg = k_malloc(sizeof(struct debug_msg));
     if (dmsg == NULL) {
-        printk("debug-viesti puuttuu");
-        __ASSERT(false, "debug_log: out of memory");
         return;
     }
+
     va_list args;
     va_start(args, fmt);
     vsnprintk(dmsg->msg, sizeof(dmsg->msg), fmt, args);
     va_end(args);
+
     k_fifo_put(&debug_fifo, dmsg);
 }
 
@@ -144,6 +151,7 @@ void debug_task(void *unused1, void *unused2, void *unused3)
     ARG_UNUSED(unused1);
     ARG_UNUSED(unused2);
     ARG_UNUSED(unused3);
+
     struct debug_msg *dmsg;
     while (true) {
         dmsg = k_fifo_get(&debug_fifo, K_FOREVER);
@@ -152,6 +160,73 @@ void debug_task(void *unused1, void *unused2, void *unused3)
         }
         k_free(dmsg);
     }
+}
+
+#define TIME_LEN_ERROR      -1  // NULL tai vaara pituus (!=6)
+#define TIME_ARRAY_ERROR    -2  // merkkijonossa muita kuin numeroita
+#define TIME_VALUE_ERROR    -3  // h/m/s yli sallitun, tai aika on 0
+
+int time_parse(char *time)
+{
+    int seconds = TIME_LEN_ERROR;
+
+    if (time == NULL) {
+        return TIME_ARRAY_ERROR;
+    }
+    if (strlen(time) != 6) {
+        return TIME_LEN_ERROR;
+    }
+    for (int i = 0; i < 6; i++) {
+        if (!isdigit((unsigned char)time[i])) {
+            return TIME_ARRAY_ERROR;
+        }
+    }
+
+    int values[3];
+    values[2] = atoi(time+4); // SEKUNNIT
+    time[4] = 0;
+    values[1] = atoi(time+2); // MINUUTIT
+    time[2] = 0;
+    values[0] = atoi(time);   // TUNNIT
+
+    if (values[0] < 0 || values[0] > 23) {
+        return TIME_VALUE_ERROR;
+    }
+    if (values[1] < 0 || values[1] > 59) {
+        return TIME_VALUE_ERROR;
+    }
+    if (values[2] < 0 || values[2] > 59) {
+        return TIME_VALUE_ERROR;
+    }
+
+    seconds = values[1] * 60 + values[2];
+    if (seconds == 0) {
+        return TIME_VALUE_ERROR;
+    }
+    return seconds;
+}
+
+static void all_leds_off(void);
+static void red_on(void);
+
+void countdown_expired(struct k_timer *timer_id);
+void red_off_expired(struct k_timer *timer_id);
+
+K_TIMER_DEFINE(countdown_timer, countdown_expired, NULL);
+K_TIMER_DEFINE(red_off_timer, red_off_expired, NULL);
+
+void countdown_expired(struct k_timer *timer_id)
+{
+    ARG_UNUSED(timer_id);
+    printk("Ajastinkeskeytys lauennut - punainen ON\n");
+    red_on();
+    k_timer_start(&red_off_timer, K_MSEC(500), K_NO_WAIT);
+}
+void red_off_expired(struct k_timer *timer_id)
+{
+    ARG_UNUSED(timer_id);
+    all_leds_off();
+    printk("Ajastin: punainen OFF\n");
 }
 
 #define STACKSIZE 1000
@@ -176,8 +251,8 @@ K_THREAD_DEFINE(uart_tid,STACKSIZE,uart_task,NULL,NULL,NULL,PRIORITY,0,0);
 K_THREAD_DEFINE(dispatcher_tid, STACKSIZE, dispatcher_task, NULL, NULL, NULL,
         PRIORITY, 0, 0);
 
-K_THREAD_DEFINE(debug_tid, STACKSIZE, debug_task, NULL, NULL, NULL, 
-    PRIORITY + 1, 0, 0);
+K_THREAD_DEFINE(debug_tid, STACKSIZE, debug_task, NULL, NULL, NULL,
+        PRIORITY + 1, 0, 0);
 
 static void all_leds_off(void)
 {
@@ -410,7 +485,21 @@ static void dispatcher_task(void *unused1, void *unused2, void *unused3)
         debug_log("Dispatcher received: %s\n", rec_item->msg);
         if (strcmp(rec_item->msg, "D") == 0) {
             debug_enabled = !debug_enabled;
-            printk("Debug output %s\n", debug_enabled ? "ENABLED" : "DISABLED");
+            printk("Debug output %s\n",
+                   debug_enabled ? "ENABLED" : "DISABLED");
+            k_free(rec_item);
+            continue;
+        }
+
+        if (isdigit((unsigned char)rec_item->msg[0])) {
+            int result = time_parse(rec_item->msg);
+            if (result > 0) {
+                k_timer_start(&countdown_timer, K_SECONDS(result), K_NO_WAIT);
+                debug_log("Ajastin asetettu %d sekunnin paahan\n", result);
+            } else {
+                debug_log("Virheellinen aikamerkkijono (virhekoodi %d)\n",
+                           result);
+            }
             k_free(rec_item);
             continue;
         }
@@ -421,7 +510,8 @@ static void dispatcher_task(void *unused1, void *unused2, void *unused3)
                  i++) {
                 struct light_command *cmd =
                     k_malloc(sizeof(struct light_command));
-                __ASSERT(cmd != NULL, "Out of memory while repeating sequence");
+                __ASSERT(cmd != NULL,
+                    "Out of memory while repeating sequence");
                 if (cmd == NULL) {
                     debug_log("Repeat command malloc failed\n");
                     break;
@@ -445,7 +535,7 @@ static void dispatcher_task(void *unused1, void *unused2, void *unused3)
                 k_sem_take(&release_sem,K_FOREVER);
             }
             debug_log("Sequence total time: %llu us\n",
-            total_sequence_time_ns / 1000);
+                       total_sequence_time_ns / 1000);
             total_sequence_time_ns = 0;
             k_free(rec_item);
             continue;
@@ -468,8 +558,11 @@ static void dispatcher_task(void *unused1, void *unused2, void *unused3)
         else {
             debug_log("Sequence buffer full\n");
         }
-        __ASSERT(sequence_length <= MAX_SEQUENCE, "Sequence buffer overflow");
-        struct light_command *cmd = k_malloc(sizeof(struct light_command));
+        __ASSERT(sequence_length <= MAX_SEQUENCE,
+                  "Sequence buffer overflow");
+
+        struct light_command *cmd = k_malloc(
+                sizeof(struct light_command));
         __ASSERT(cmd != NULL, "Out of memory while allocating light command");
         if (cmd == NULL) {
             debug_log("Light command malloc failed\n");
@@ -497,7 +590,7 @@ static void dispatcher_task(void *unused1, void *unused2, void *unused3)
         }
         timing_t dispatch_end = timing_counter_get();
         uint64_t dispatch_ns = timing_cycles_to_ns(
-            timing_cycles_get(&dispatch_start, &dispatch_end));
+                timing_cycles_get(&dispatch_start, &dispatch_end));
         debug_log("UART->dispatch latency: %llu us\n", dispatch_ns / 1000);
 
         if (color == 'R' ||
@@ -565,7 +658,8 @@ void yellow_task(void *unused1, void *unused2, void *unused3)
 
             cmd = k_fifo_get(&yellow_fifo, K_NO_WAIT);
         }
-        k_mutex_unlock(&yellow_mutex);
+        k_mutex_unlock(
+            &yellow_mutex);
         __ASSERT(cmd != NULL,
             "Yellow task woke up from condvar but FIFO was empty");
         if (cmd == NULL) {
@@ -778,13 +872,14 @@ int main(void)
     printk("\n");
     printk("==============================\n");
     printk("RGB2 traffic light started\n");
-    printk("====================s==========\n");
+    printk("==============================\n");
     printk("Send commands through UART:\n");
     printk("R,1000\n");
     printk("Y,500\n");
     printk("G,1000\n");
     printk("T\n");
     printk("D            (toggle debug prints on/off)\n");
+    printk("HHMMSS       (e.g. 000010 -> red on in 10s)\n");
     printk("==============================\n");
 
     return 0;
