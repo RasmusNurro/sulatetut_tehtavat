@@ -1,29 +1,12 @@
 /* Liikennevalot RGB2-ledillä ja taskien avulla
 
-   Tavoite: 3p (tämän viikkotehtävän maksimipistemäärä)
-   Perustelu / toteutetut osat:
-   - 1p: Ajoitukset jokaiseen valotaskiin (red/yellow/green) mikrosekuntien
-         tarkkuudella + sekvenssin kokonaisaika (summataan taskien ajoista).
-         Mitattavissa debug päällä/pois -tilassa 'D'-komennolla.
-   - +1p: Debug-taski + FIFO-puskuri: muut taskit eivät enää kutsu printk:ta
-         suoraan, vaan lähettävät viestin debug_fifo:on, jota debug_task lukee.
-   - +1p: Kaksi lisä-ajoitustietoa: UART-komennon dispatch-käsittelyaika sekä
-         painonappien painallusten kokonaismäärä.
-   - +1p: Debugin asetus päälle/pois sarjaportin kautta komennolla 'D'
-         (debug_enabled-lippu DEBUG-vakion sijaan).
-   - +1p: Assert-tarkistuksia (7 kpl) ohjelman toiminnan varmistamiseksi.
-
-   Unit testing -tehtava (parser/-kansio, googletest, 17/17 testia lapaisee):
-   - 1p: time_parse() HHMMSS-parseri + boundary-testit + integraatio tahan
-         ohjelmaan (kts. countdown_timer/red_off_timer + dispatcher_task,
-         UART-komento HHMMSS kaynnistaa ajastimen)
-
-   Nappien oletus:
-   sw0 = nappi 1 = Play/Pause
-   sw1 = nappi 2 = punainen
-   sw2 = nappi 3 = keltainen
-   sw3 = nappi 4 = vihreä
-   sw4 = nappi 5 = vilkkuva keltainen
+    Unit testing -tehtävä, tavoite 4p (parser/-kansio, googletest):
+    - time_parse() + boundary-testit + integraatio (HHMMSS -> ajastin)
+    - CommandParserTest-suite (parse_command peilattuna, 15 testiä)
+    - Oma lisäominaisuus: komento 'X' peruu ajastimen (k_timer_stop)
+  
+    Napit: sw0 Play/Pause, sw1 punainen, sw2 keltainen, sw3 vihreä,
+    sw4 vilkkuva keltainen
 */
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
@@ -122,7 +105,7 @@ volatile bool manual_red = false;
 volatile bool manual_yellow = false;
 volatile bool manual_green = false;
 
-static volatile bool debug_enabled = true;
+static volatile bool debug_enabled = true; 
 
 struct debug_msg {
     void *fifo_reserved;
@@ -134,6 +117,7 @@ static atomic_t button_press_count = ATOMIC_INIT(0);
 static void debug_log(const char *fmt, ...)
 {
     struct debug_msg *dmsg = k_malloc(sizeof(struct debug_msg));
+
     if (dmsg == NULL) {
         return;
     }
@@ -153,6 +137,7 @@ void debug_task(void *unused1, void *unused2, void *unused3)
     ARG_UNUSED(unused3);
 
     struct debug_msg *dmsg;
+
     while (true) {
         dmsg = k_fifo_get(&debug_fifo, K_FOREVER);
         if (debug_enabled) {
@@ -162,9 +147,10 @@ void debug_task(void *unused1, void *unused2, void *unused3)
     }
 }
 
-#define TIME_LEN_ERROR      -1  // NULL tai vaara pituus (!=6)
-#define TIME_ARRAY_ERROR    -2  // merkkijonossa muita kuin numeroita
-#define TIME_VALUE_ERROR    -3  // h/m/s yli sallitun, tai aika on 0
+// Unit testing (1p): time_parse() integroitu, testattu googletestillä
+#define TIME_LEN_ERROR      -1
+#define TIME_ARRAY_ERROR    -2
+#define TIME_VALUE_ERROR    -3
 
 int time_parse(char *time)
 {
@@ -183,11 +169,11 @@ int time_parse(char *time)
     }
 
     int values[3];
-    values[2] = atoi(time+4); // SEKUNNIT
+    values[2] = atoi(time+4);
     time[4] = 0;
-    values[1] = atoi(time+2); // MINUUTIT
+    values[1] = atoi(time+2);
     time[2] = 0;
-    values[0] = atoi(time);   // TUNNIT
+    values[0] = atoi(time);
 
     if (values[0] < 0 || values[0] > 23) {
         return TIME_VALUE_ERROR;
@@ -222,6 +208,7 @@ void countdown_expired(struct k_timer *timer_id)
     red_on();
     k_timer_start(&red_off_timer, K_MSEC(500), K_NO_WAIT);
 }
+
 void red_off_expired(struct k_timer *timer_id)
 {
     ARG_UNUSED(timer_id);
@@ -491,6 +478,15 @@ static void dispatcher_task(void *unused1, void *unused2, void *unused3)
             continue;
         }
 
+        // Oma lisäominaisuus (+1p): 'X' peruu ajastimen
+        if (strcmp(rec_item->msg, "X") == 0) {
+            k_timer_stop(&countdown_timer);
+            k_timer_stop(&red_off_timer);
+            printk("Ajastin peruttu\n");
+            k_free(rec_item);
+            continue;
+        }
+
         if (isdigit((unsigned char)rec_item->msg[0])) {
             int result = time_parse(rec_item->msg);
             if (result > 0) {
@@ -503,6 +499,7 @@ static void dispatcher_task(void *unused1, void *unused2, void *unused3)
             k_free(rec_item);
             continue;
         }
+
         if (strcmp(rec_item->msg, "T") == 0) {
             debug_log("Dispatcher: repeat sequence\n");
             for (int i = 0;
@@ -711,12 +708,14 @@ void green_task(void *unused1, void *unused2, void *unused3)
         }
 
         timing_t start_time = timing_counter_get();
+        
         debug_log("GREEN ON (%u ms)\n",
         cmd->duration);
         green_on();
         k_msleep(cmd->duration);
         all_leds_off();
         debug_log("GREEN OFF\n");
+
         timing_t end_time = timing_counter_get();
         uint64_t diff_ns = timing_cycles_to_ns(
                 timing_cycles_get(&start_time, &end_time));
@@ -880,6 +879,7 @@ int main(void)
     printk("T\n");
     printk("D            (toggle debug prints on/off)\n");
     printk("HHMMSS       (e.g. 000010 -> red on in 10s)\n");
+    printk("X            (cancel pending timer)\n");
     printk("==============================\n");
 
     return 0;
