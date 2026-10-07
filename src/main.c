@@ -1,12 +1,9 @@
 /* Liikennevalot RGB2-ledillä ja taskien avulla
-
-    Unit testing -tehtävä, tavoite 4p (parser/-kansio, googletest):
-    - time_parse() + boundary-testit + integraatio (HHMMSS -> ajastin)
-    - CommandParserTest-suite (parse_command peilattuna, 15 testiä)
-    - Oma lisäominaisuus: komento 'X' peruu ajastimen (k_timer_stop)
-  
-    Napit: sw0 Play/Pause, sw1 punainen, sw2 keltainen, sw3 vihreä,
-    sw4 vilkkuva keltainen
+   Robot Framework -tehtävä: UART-komennot lähetetään nyt myös Robotista,
+   lopetusmerkkinä 'X'. time_parse()-vastaus (sekunnit tai virhekoodi)
+   lähetetään takaisin UARTiin muodossa "<arvo>X".
+   Napit: sw0 Play/Pause, sw1 punainen, sw2 keltainen, sw3 vihreä,
+   sw4 vilkkuva keltainen 
 */
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
@@ -105,15 +102,18 @@ volatile bool manual_red = false;
 volatile bool manual_yellow = false;
 volatile bool manual_green = false;
 
-static volatile bool debug_enabled = true; 
+// Debug pois oletuksena, mutta päälle mikäli tarve debugata
+static volatile bool debug_enabled = false;
 
 struct debug_msg {
     void *fifo_reserved;
     char msg[80];
 };
 K_FIFO_DEFINE(debug_fifo);
+
 static uint64_t total_sequence_time_ns = 0;
 static atomic_t button_press_count = ATOMIC_INIT(0);
+
 static void debug_log(const char *fmt, ...)
 {
     struct debug_msg *dmsg = k_malloc(sizeof(struct debug_msg));
@@ -147,7 +147,6 @@ void debug_task(void *unused1, void *unused2, void *unused3)
     }
 }
 
-// Unit testing (1p): time_parse() integroitu, testattu googletestillä
 #define TIME_LEN_ERROR      -1
 #define TIME_ARRAY_ERROR    -2
 #define TIME_VALUE_ERROR    -3
@@ -238,6 +237,7 @@ K_THREAD_DEFINE(uart_tid,STACKSIZE,uart_task,NULL,NULL,NULL,PRIORITY,0,0);
 K_THREAD_DEFINE(dispatcher_tid, STACKSIZE, dispatcher_task, NULL, NULL, NULL,
         PRIORITY, 0, 0);
 
+// Debug-taskilla pienempi prioriteetti kuin muilla (+1p, debug-taski)
 K_THREAD_DEFINE(debug_tid, STACKSIZE, debug_task, NULL, NULL, NULL,
         PRIORITY + 1, 0, 0);
 
@@ -391,7 +391,9 @@ static void uart_task(void *unused1, void *unused2, void *unused3)
     memset(uart_msg, 0, sizeof(uart_msg));
     while (true) {
         if (uart_poll_in(uart_dev, &rc) == 0) {
-            if (rc == '\r' || rc == '\n') {
+            // '\r'/'\n' ihmisen kirjoittamalle komennolle,
+            // 'X' Robot Frameworkin lähettämälle komennolle
+            if (rc == '\r' || rc == '\n' || rc == 'X') {
                 if (uart_msg_cnt > 0) {
                     uart_msg[uart_msg_cnt] = '\0';
                     debug_log("UART msg: %s\n", uart_msg);
@@ -477,12 +479,18 @@ static void dispatcher_task(void *unused1, void *unused2, void *unused3)
             k_free(rec_item);
             continue;
         }
-
-        // Oma lisäominaisuus (+1p): 'X' peruu ajastimen
-        if (strcmp(rec_item->msg, "X") == 0) {
+        // 'C' peruu ajastimen nyt UART-viestin lopetusmerkki eikä voi enää 
+        // esiintyä viestin sisällössä
+        if (strcmp(rec_item->msg, "C") == 0) {
             k_timer_stop(&countdown_timer);
             k_timer_stop(&red_off_timer);
             printk("Ajastin peruttu\n");
+            k_free(rec_item);
+            continue;
+        }
+
+        // Tyhja viesti (pelkka 'X' ilman sisaltoa) ohitetaan hiljaa
+        if (rec_item->msg[0] == '\0') {
             k_free(rec_item);
             continue;
         }
@@ -491,11 +499,8 @@ static void dispatcher_task(void *unused1, void *unused2, void *unused3)
             int result = time_parse(rec_item->msg);
             if (result > 0) {
                 k_timer_start(&countdown_timer, K_SECONDS(result), K_NO_WAIT);
-                debug_log("Ajastin asetettu %d sekunnin paahan\n", result);
-            } else {
-                debug_log("Virheellinen aikamerkkijono (virhekoodi %d)\n",
-                           result);
             }
+            printk("%dX", result);
             k_free(rec_item);
             continue;
         }
@@ -585,6 +590,7 @@ static void dispatcher_task(void *unused1, void *unused2, void *unused3)
             k_free(cmd);
             break;
         }
+
         timing_t dispatch_end = timing_counter_get();
         uint64_t dispatch_ns = timing_cycles_to_ns(
                 timing_cycles_get(&dispatch_start, &dispatch_end));
@@ -619,7 +625,9 @@ void red_task(
         if (cmd == NULL) {
             continue;
         }
+
         timing_t start_time = timing_counter_get();
+
         debug_log("RED ON (%u ms)\n",
         cmd->duration);
 
@@ -708,7 +716,7 @@ void green_task(void *unused1, void *unused2, void *unused3)
         }
 
         timing_t start_time = timing_counter_get();
-        
+
         debug_log("GREEN ON (%u ms)\n",
         cmd->duration);
         green_on();
@@ -879,7 +887,7 @@ int main(void)
     printk("T\n");
     printk("D            (toggle debug prints on/off)\n");
     printk("HHMMSS       (e.g. 000010 -> red on in 10s)\n");
-    printk("X            (cancel pending timer)\n");
+    printk("C            (cancel pending timer)\n");
     printk("==============================\n");
 
     return 0;
